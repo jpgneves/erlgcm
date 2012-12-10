@@ -1,0 +1,14 @@
+{application, erlgcm,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { erlgcm_app, []}},
+  {env, [
+	 {api_key, "AIzaSyDhUo6qwImh-ILDMqsYsw6QqFnedD7Fn10"}
+	]}
+ ]}.
