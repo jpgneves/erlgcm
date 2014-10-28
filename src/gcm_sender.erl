@@ -80,7 +80,7 @@ do_send(Message, RegistrationIds) ->
                             Body}, [], []) of
     {ok, {{_, 200, _}, _, ReplyBody}} -> handle_reply(ReplyBody);
     {ok, {{_, 503, _}, _, _}}         -> throw(?ERROR_UNAVAILABLE);
-    {ok, {{_, Code, _}, _, Body}} = Reply-> io:format("~p~n", [Reply]), throw({Code, Body})
+    {ok, {{_, Code, _}, _, ReplyBody}} -> throw({http_error, {Code, ReplyBody}})
   end.
 
 handle_reply("") ->
