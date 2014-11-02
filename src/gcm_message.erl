@@ -138,7 +138,7 @@ append_param(Param, Body) ->
   Body ++ [Param].
 
 get_default(Key, KVs, Default) ->
-  case lists:keysearch(Key, 1, KVs) of
-    {value, Value} -> Value;
-    false          -> Default
+  case lists:keyfind(Key, 1, KVs) of
+    false        -> Default;
+    {Key, Value} -> Value
   end.
