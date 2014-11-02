@@ -31,51 +31,58 @@
 	]).
 
 %% Includes
--include_lib("erlgcm/include/erlgcm.hrl").
+-include("erlgcm.hrl").
 
 %% Types and definitions
--opaque collapse_key() :: string().
--opaque ttl()          :: integer().
--opaque data()         :: [{atom(), integer() | string()}].
+-type collapse_key()     :: string() | undefined.
+-type data()             :: [{atom(), integer() | string()}].
+-type delay_while_idle() :: boolean().
+-type ttl()              :: integer() | undefined.
 
 -record(gcm_message,
 	{
 	  collapse_key     :: collapse_key(),
-	  delay_while_idle :: boolean(),
+	  delay_while_idle :: delay_while_idle(),
 	  time_to_live     :: ttl(),
 	  data             :: data()
 	}).
 
--opaque gcm_message() :: record(gcm_message).
+-type message() :: record(gcm_message).
+
+-export_type([ data/0,
+               delay_while_idle/0,
+               collapse_key/0,
+               message/0,
+               ttl/0
+             ]).
 
 %% @doc Creates a new message with the given properties.
--spec new([{atom(), any()}]) -> gcm_message().
-%% @end
+-spec new([{atom(), any()}]) -> message().
 new(Props) ->
   #gcm_message{ collapse_key = get_default(collapse_key, Props, undefined),
-		delay_while_idle = get_default(delay_while_idle, Props, undefined),
+		delay_while_idle = get_default(delay_while_idle, Props, false),
 		time_to_live = get_default(time_to_live, Props, undefined),
 		data = get_default(data, Props, [])
 	      }.
 
 
--spec collapse_key(gcm_message()) -> collapse_key().
+-spec collapse_key(message()) -> collapse_key().
 collapse_key(#gcm_message{collapse_key = Key}) ->
   Key.
 
--spec is_delay_while_idle(gcm_message()) -> boolean().
+-spec is_delay_while_idle(message()) -> delay_while_idle().
 is_delay_while_idle(#gcm_message{delay_while_idle = Delay}) ->
   Delay.
 
--spec time_to_live(gcm_message()) -> ttl().
+-spec time_to_live(message()) -> ttl().
 time_to_live(#gcm_message{time_to_live = TTL}) ->
   TTL.
 
--spec data(gcm_message()) -> data().
+-spec data(message()) -> data().
 data(#gcm_message{data = Data}) ->
   Data.
 
--spec serialize(Format :: atom(), gcm_message(), [string()]) -> any().
+-spec serialize(Format :: atom(), message(), [gcm_sender:registration_id()]) -> any().
 serialize(json, Message, RegistrationIds) ->
   build_json(Message, RegistrationIds);
 serialize(_Format, _Message, _RegistrationIds) ->
@@ -95,7 +102,7 @@ build_json(#gcm_message{} = Message, RegistrationIds) ->
   mochijson2:encode({struct, Body}).
 
 
--spec maybe_set(atom(), gcm_message(), list()) -> list().
+-spec maybe_set(atom(), message(), [{atom(), any()}]) -> [{atom(), any()}].
 maybe_set(?PARAM_DELAY_WHILE_IDLE, #gcm_message{delay_while_idle = Delay}, Body) ->
   case Delay of
     undefined -> Body;
@@ -116,9 +123,7 @@ maybe_set(?PARAM_PAYLOAD, #gcm_message{data = Data}, Body) ->
   case Data of
     [] -> Body;
     _  -> append_param(make_param({?PARAM_PAYLOAD, {struct, encode(Data)}}), Body)
-  end;
-maybe_set(Key, Value, Body) when is_integer(Value) ->
-  maybe_set(Key, integer_to_list(Value), Body).
+  end.
 
 encode(Data) ->
   lists:map(fun({K,V}) when is_list(V) ->
@@ -133,7 +138,7 @@ append_param(Param, Body) ->
   Body ++ [Param].
 
 get_default(Key, KVs, Default) ->
-  case lists:keyfind(Key, 1, KVs) of
-    false -> Default;
-    {Key, Value} -> Value
+  case lists:keysearch(Key, 1, KVs) of
+    {value, Value} -> Value;
+    false          -> Default
   end.

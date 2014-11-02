@@ -25,42 +25,48 @@
           update_status/3
 	]).
 
--include_lib("erlgcm/include/erlgcm.hrl").
--include_lib("erlgcm/include/utils.hrl").
+-include("erlgcm.hrl").
+-include("utils.hrl").
 
 -define(API_KEY, application:get_env(erlgcm, api_key)).
 
 -define(BACKOFF_INITIAL_DELAY, 1000).
 -define(MAX_BACKOFF_DELAY, 1024000).
 
+-type registration_id() :: string().
+
+-export_type([ registration_id/0 ]).
+
 %%==============================================================================
 %% API functions
 %%==============================================================================
 
--spec send(gcm_message:message(), [string()]) -> {ok, gcm_result:result()} | {error, no_more_retries}.
+-spec send(gcm_message:message(), [registration_id()]) -> {ok, gcm_result:result()} | {error, no_more_retries}.
 send(Message, RegistrationIds) ->
   send(Message, RegistrationIds, 1).
 
--spec send(gcm_message:message(), [string()], integer()) ->
+-spec send(gcm_message:message(), [registration_id()], non_neg_integer()) ->
               {ok, gcm_result:result()} | {error, Error :: atom()}.
 send(Message, RegistrationIds, Attempts) ->
   send(Message, RegistrationIds, Attempts, ?BACKOFF_INITIAL_DELAY).
 
+-spec send(gcm_message:message(), [registration_id()], non_neg_integer(), integer()) ->
+              {ok, gcm_result:result()} | {error, Error :: atom()}.
 send(_Message, _RegistrationIds, 0, _Backoff) ->
   {error, no_more_retries};
 send(Message, RegistrationIds, Attempts, Backoff) ->
-  Result = do_send(Message, RegistrationIds),
-  SleepTime = round(Backoff / (2 + random:uniform(Backoff))),
-  timer:sleep(SleepTime),
-  case Result of
-    {ok, _} -> Result;
-    {error, ErrorResult} ->
-      io:format("Error: ~p~n", [gcm_result:error_code_name(ErrorResult)]),
+  try do_send(Message, RegistrationIds) of
+      Result -> Result
+  catch
+    throw:_Error ->
+      SleepTime = round(Backoff / (2 + random:uniform(Backoff))),
+      timer:sleep(SleepTime),
       NewBackoff = ?ternary((2 * Backoff) < ?MAX_BACKOFF_DELAY,
                             Backoff * 2, Backoff),
       send(Message, RegistrationIds, Attempts - 1, NewBackoff)
   end.
 
+-spec update_status(_, _, _) -> no_return().
 update_status(_UnsentRegIds, _AllResults, _MulticastResult) ->
   throw(not_implemented).
 
@@ -78,9 +84,10 @@ do_send(Message, RegistrationIds) ->
                             ],
                             ?CONTENT_TYPE_JSON,
                             Body}, [], []) of
-    {ok, {{_, 200, _}, _, ReplyBody}} -> handle_reply(ReplyBody);
-    {ok, {{_, 503, _}, _, _}}         -> throw(?ERROR_UNAVAILABLE);
-    {ok, {{_, Code, _}, _, ReplyBody}} -> throw({http_error, {Code, ReplyBody}})
+    {ok, {{_, 200, _}, _, ReplyBody}}  -> handle_reply(ReplyBody);
+    {ok, {{_, 503, _}, _, _}}          -> throw(?ERROR_UNAVAILABLE);
+    {ok, {{_, Code, _}, _, ReplyBody}} -> throw({http_error, {Code, ReplyBody}});
+    {error, _} = E                     -> throw(E)
   end.
 
 handle_reply("") ->

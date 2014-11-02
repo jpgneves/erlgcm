@@ -43,6 +43,12 @@
 
 -opaque result() :: record(result).
 
+-export_type([ crid/0,
+               error_code/0,
+               message_id/0,
+               result/0
+             ]).
+
 -spec new() -> result().
 new() ->
   #result{}.
